@@ -90,7 +90,7 @@ pub fn main() !void {
             var file = @constCast(&(
                 std.fs.cwd().openFile(
                     "sh_http.log", .{ .mode = .write_only }
-                ) catch |e| if (e != error.FileNotExist) {
+                ) catch |e| if (e != error.FileNotFound) {
                     std.debug.print("failed to access log file: {t}\n", .{e});
                     break :loop;
                 } else b: {
