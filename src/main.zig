@@ -1,6 +1,7 @@
 const std = @import("std");
 const conf = @import("config.zig");
 const runner = @import("runner.zig");
+const hlp = @import("helpers.zig");
 
 const Config = conf.Config;
 
@@ -45,7 +46,6 @@ pub fn main() !void {
     std.debug.print("listening on port {d}\n", .{config.port});
     
     const coms = try std.posix.pipe();
-    _ = coms;
 
     var pids = try alloc.alloc(std.posix.pid_t, config.conn_forks);
     defer alloc.free(pids);
@@ -72,7 +72,44 @@ pub fn main() !void {
 
     std.debug.print("spawned {d} listeners\n", .{config.conn_forks});
 
-    while(!stop){}
+    var msgs = try std.ArrayList([]u8).initCapacity(alloc, 0);
+    defer {
+        for (msgs.items) |msg|
+            alloc.free(msg);
+        msgs.deinit(alloc);
+    }
+    loop: while(!stop){
+        var buf:[1024]u8 = undefined;
+        const n = try std.posix.read(coms[0], &buf);
+        if (n > 0) {
+            var just_created_log:bool = false;
+
+            var file = @constCast(&(
+                std.fs.cwd().openFile(
+                    "sh_http.log", .{ .mode = .write_only }
+                ) catch |e| if (e != error.FileNotExist) {
+                    std.debug.print("failed to access log file: {t}\n", .{e});
+                    break :loop;
+                } else b: {
+                    just_created_log = true;
+                    break :b try std.fs.cwd().createFile("sh_http.log", .{});
+                }
+            ));
+            _ = &file;
+
+            if (just_created_log) for (msgs.items) |msg| {
+                if (try hlp.write_or_err_and_break(
+                    file, msg, "log", .{ .newline = true }
+                )) break :loop;
+            };
+
+            if (try hlp.write_or_err_and_break(
+                file, buf[0..n], "log", .{ .newline = true }
+            )) break :loop;
+
+            try msgs.append(alloc, try alloc.dupe(u8, buf[0..n]));
+        }
+    }
     for (pids) |pid|
         try std.posix.kill(pid, 9);
 }
