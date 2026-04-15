@@ -30,8 +30,6 @@ pub const Config = struct {
 };
 
 pub fn read(file:*std.fs.File, alloc:std.mem.Allocator) !Config {
-    var line_start:usize = 0;
-
     var mem = try std.ArrayList(u8).initCapacity(alloc, 0);
     defer _ = mem.deinit(alloc);
 
@@ -44,21 +42,37 @@ pub fn read(file:*std.fs.File, alloc:std.mem.Allocator) !Config {
     var conf = try Config.init(alloc);
 
     var i:usize = 0;
+    var line_no:usize = 0;
     errdefer {
         conf.deinit(alloc);
-        crappy_reader.seekTo(line_start) catch |e| @panic(@errorName(e));
-        var pos:usize = line_start;
+        crappy_reader.seekTo(0) catch |e| @panic(@errorName(e));
+        var line_start:usize = 0;
+        {
+            var j:usize = 0;
+            while (itr(reader, &j, &line_start) catch |e| @panic(@errorName(e))) |_| {
+                if (j == line_no-1) break;
+            }
+        }
+        var pos:usize = i;
         while (itr(reader, null, null) catch |e| @panic(@errorName(e))) |b| : (pos += 1) {
             if (b == '\n') break;
-            if (pos == i)
-                std.debug.print("\x0b\x08\x1b[31m^\x1b[A\x1b[31m", .{});
-            std.debug.print("{c}\x1b[0m", .{b});
+            std.debug.print("\x1b[3{d}m{c}\x0b\x08\x1b[35m^\x1b[A\x1b[0m",
+            .{
+                @as(u3, if (std.ascii.isDigit(b))
+                    3
+                else if (std.ascii.isAlphabetic(b))
+                    4
+                else
+                    6
+                ),
+                b
+            });
         }
         std.debug.print("\n\n", .{});
     }
 
     var string:u8 = 0;
-    reading: while (try itr(reader, &line_start, &i)) |b| {
+    reading: while (try itr(reader, &line_no, &i)) |b| {
         if (string != 0) {
             if (string == b)
                 string = 0
@@ -69,7 +83,7 @@ pub fn read(file:*std.fs.File, alloc:std.mem.Allocator) !Config {
         if (!std.ascii.isWhitespace(b)) switch (b) {
             '"', '\'' => string = b,
 
-            '#' => while (try itr(reader, &line_start, &i)) |c| {
+            '#' => while (try itr(reader, &line_no, &i)) |c| {
                 if (c == '\n') break;
             },
 
