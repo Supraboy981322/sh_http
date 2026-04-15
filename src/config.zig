@@ -99,13 +99,14 @@ pub fn read(file:*std.fs.File, alloc:std.mem.Allocator) !Config {
             defer alloc.free(value);
             if (key.len < 1)
                 return error.UnexpectedNewline;
-            defer {
-                alloc.free(key);
-                key = alloc.alloc(u8, 0) catch |e| @panic(@errorName(e));
-            }
             const thing = std.meta.stringToEnum(Config.Valid, key) orelse {
+                alloc.free(key);
+                key = try alloc.alloc(u8, 0);
                 return error.UnknownField;
             };
+
+            alloc.free(key);
+            key = try alloc.alloc(u8, 0);
 
             switch (thing) {
                 .dir => {
