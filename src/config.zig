@@ -7,11 +7,13 @@ pub const Config = struct {
     port:u16 = 9843,
     dir:[]u8 = @constCast("."),
     chroot:bool = true,
+    conn_forks:u64 = 10,
 
     const Valid = enum {
         port,
         dir,
         chroot,
+        @"connection listeners",
     };
 
     pub fn init(alloc:std.mem.Allocator) !Config {
@@ -105,6 +107,16 @@ pub fn read(file:*std.fs.File, alloc:std.mem.Allocator) !Config {
                             false
                         else
                             return error.InvalidBoolean;
+                },
+                .@"connection listeners" => {
+                    var v:u64 = 0;
+                    for (value) |c| {
+                        if (!std.ascii.isDigit(c))
+                            return error.InvalidNumber;
+                        v *= 10;
+                        v += c - '0';
+                    }
+                    conf.conn_forks = v;
                 },
             }
         }
