@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title><$ echo "bar" $></title>
+  </head>
+  <body>
+    <$
+      for thing in $(ls); do
+        echo "$thing" | sed 's/$/\t/'
+      done
+    $>
+  </body>
+</html>

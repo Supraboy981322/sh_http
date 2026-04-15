@@ -1,0 +1,121 @@
+const std = @import("std");
+const types = @import("types.zig");
+
+pub fn parse(in:[]u8, alloc:std.mem.Allocator) !types.Parsed{
+    var stripped = try std.ArrayList(u8).initCapacity(alloc, 0);
+    defer _ = stripped.deinit(alloc);
+
+    var res = types.Parsed{
+        .og = in,
+        .stripped = undefined,
+        .scripts = try alloc.alloc(types.Script, 0),
+    };
+
+    var i:usize = 0;
+    loop: while (i < in.len) : (i += 1) {
+        const b = in[i];
+        const do = if (b == '<' and in.len > i+1) in[i+1] == '$' else false;
+        if (do) {
+            defer i += 1;
+            var script = types.Script {
+                .txt = undefined,
+                .pos = i,
+                .end = undefined,
+            };
+            i += 2;
+            inner: while (i < in.len) : (i += 1) {
+                if (in[i] == '$' and in.len > i+1) if (in[i+1] == '>') {
+                    script.txt = in[script.pos+2..i];
+                    script.end = i+2;
+                    break :inner;
+                };
+            }
+            var new = try alloc.alloc(types.Script, res.scripts.len+1);
+            for (res.scripts, 0..) |s, j| {
+                new[j] = s;
+            }
+            new[new.len - 1] = script;
+            alloc.free(res.scripts);
+            res.scripts = new;
+            continue :loop;
+        }
+        try stripped.append(alloc, b);
+    }
+    res.stripped = try stripped.toOwnedSlice(alloc);
+
+    return res;
+}
+
+pub fn exec(in:[]u8, alloc:std.mem.Allocator) ![]u8 {
+    const fd_set = try std.posix.pipe();
+    {
+        var file = std.fs.File{ .handle = fd_set[1] };
+        const n = try file.write(in);
+        if (n != in.len) std.debug.panic("only wrote {d} bytes of {d}\n", .{n, in.len});
+    }
+    const out_pipe = try std.posix.pipe();
+    const pid = try std.posix.fork();
+    if (pid == 0) {
+        try std.posix.dup2(
+            out_pipe[1], std.posix.STDOUT_FILENO
+        );
+        try std.posix.dup2(
+            fd_set[0], std.posix.STDIN_FILENO
+        );
+
+        std.posix.close(fd_set[1]);
+        std.posix.close(fd_set[0]);
+        std.posix.close(out_pipe[0]);
+        std.posix.close(out_pipe[1]);
+
+        const err = std.posix.execvpeZ(
+            "bash", &.{ "bash", "-" }, try std.process.createEnvironFromMap(alloc, &(try std.process.getEnvMap(alloc)), .{})
+        );
+        @panic(@errorName(err));
+    }
+    std.posix.close(fd_set[1]);
+    std.posix.close(fd_set[0]);
+    std.posix.close(out_pipe[1]);
+    defer {
+        std.posix.close(out_pipe[0]);
+    }
+
+    _ = std.posix.waitpid(pid, 0);
+
+    var buf:[1024]u8 = undefined;
+    var output = std.fs.File{ .handle = out_pipe[0] };
+    var reader = output.reader(&buf);
+
+    var res = try std.ArrayList(u8).initCapacity(alloc, 0);
+    defer res.deinit(alloc);
+
+    while (!reader.atEnd()) {
+        var buf_2:[1024]u8 = undefined;
+        _ = &buf_2;
+        const b = reader.interface.takeByte() catch |e|
+            if (e != error.EndOfStream)
+                return e
+            else
+                break;
+        try res.append(alloc, b);
+    }
+
+    return res.toOwnedSlice(alloc);
+}
+
+pub fn construct(alloc:std.mem.Allocator, parsed:types.Parsed) ![]u8 {
+    var res = try std.ArrayList(u8).initCapacity(alloc, 0);
+    defer res.deinit(alloc);
+    var offset:usize = 0;
+    for (parsed.scripts) |script| {
+        try res.appendSlice(alloc, parsed.og[offset..script.pos]);
+        const out = try exec(script.txt, alloc);
+        try res.appendSlice(alloc, out);
+        if (res.getLastOrNull()) |b| {
+            if (b == '\n') _ = res.pop();
+        }
+        offset = script.end;
+    } if (parsed.scripts.len > 1)
+        try res.appendSlice(alloc, parsed.og[offset..]);
+    return try res.toOwnedSlice(alloc);
+}
