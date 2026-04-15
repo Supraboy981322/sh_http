@@ -47,7 +47,7 @@ pub fn main() !void {
     const coms = try std.posix.pipe();
     _ = coms;
 
-    for (0..10) |_| {
+    for (0..config.conn_forks) |_| {
         const pid = try std.posix.fork();
         if (pid == 0) {
             while (true) {
@@ -62,6 +62,7 @@ pub fn main() !void {
             }
         }
     }
+    std.debug.print("spawned {d} listeners\n", .{config.conn_forks});
     while(true){}
 }
 
@@ -101,7 +102,7 @@ fn handle_request(conn:std.net.Server.Connection) !void {
             itr.reset();
             break :b itr.first();
         };
-    _ = page;
+    _ = &page;
 
     const src = @embedFile("test.shtm");
     const parsed = try runner.parse(@constCast(src), alloc);
