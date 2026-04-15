@@ -8,12 +8,14 @@ pub const Config = struct {
     dir:[]u8 = @constCast("."),
     chroot:bool = true,
     conn_forks:u64 = 10,
+    max_forks:u64 = std.math.maxInt(u64),
 
     const Valid = enum {
         port,
         dir,
         chroot,
         @"connection listeners",
+        @"max forks",
     };
 
     pub fn init(alloc:std.mem.Allocator) !Config {
@@ -108,15 +110,13 @@ pub fn read(file:*std.fs.File, alloc:std.mem.Allocator) !Config {
                         else
                             return error.InvalidBoolean;
                 },
-                .@"connection listeners" => {
-                    var v:u64 = 0;
-                    for (value) |c| {
-                        if (!std.ascii.isDigit(c))
-                            return error.InvalidNumber;
-                        v *= 10;
-                        v += c - '0';
-                    }
-                    conf.conn_forks = v;
+                .@"connection listeners", .@"max forks" => {
+                    const field = &switch (thing) {
+                        .@"connection listeners" => conf.conn_forks,
+                        .@"max forks" => conf.max_forks,
+                        else => unreachable,
+                    };
+                    field.* = try hlp.to_int_or_err(value, u64);
                 },
             }
         }
