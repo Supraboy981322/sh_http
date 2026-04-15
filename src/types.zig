@@ -12,3 +12,8 @@ pub const Parsed = struct {
     stripped:[]u8,
     scripts:[]Script
 };
+
+pub const Request = struct {
+    file:[]u8,
+    root:[]u8,
+};
