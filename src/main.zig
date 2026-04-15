@@ -1,13 +1,48 @@
 const std = @import("std");
+const conf = @import("config.zig");
+const runner = @import("runner.zig");
 
-const port = 5487;
+const Config = conf.Config;
+
+var config:Config = .{};
 
 pub fn main() !void {
-    const addr = try std.net.Address.resolveIp("::", port);
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const alloc = gpa.allocator();
+
+    var config_file = std.fs.cwd().openFile("config", .{ .mode = .read_only }) catch |e| b: {
+        if (e != error.FileNotFound) {
+            var stderr = @constCast(&std.fs.File.stderr()).writer(&.{}).interface;
+            try stderr.print("failed to read config: {t}\n", .{e});
+            std.process.abort();
+        }
+        const txt =
+            \\# this is the default sh_http config
+            \\dir = "."
+            \\port = 4380
+            \\chroot = true
+        ;
+        var file = try std.fs.cwd().createFile("config", .{ .read = true });
+        const n = try file.write(txt);
+        if (n != txt.len) std.debug.panic(
+            "error writing default config:"
+                ++ "expected to write {d} bytes,"
+                ++ "but only wrote {d}\n"
+        , .{txt.len, n});
+
+        break :b file;
+    };
+
+    defer config_file.close();
+    config = try @import("config.zig").read(&config_file, alloc);
+    defer config.deinit(alloc);
+
+    const addr = try std.net.Address.resolveIp("::", config.port);
     var server = try addr.listen(.{ .reuse_address = true });
     defer server.deinit();
 
-    std.debug.print("listening on port {d}\n", .{port});
+    std.debug.print("listening on port {d}\n", .{config.port});
     
     const coms = try std.posix.pipe();
     _ = coms;
@@ -69,12 +104,12 @@ fn handle_request(conn:std.net.Server.Connection) !void {
     _ = page;
 
     const src = @embedFile("test.shtm");
-    const parsed = try @import("runner.zig").parse(@constCast(src), alloc);
+    const parsed = try runner.parse(@constCast(src), alloc);
     defer {
         alloc.free(parsed.og);
         alloc.free(parsed.stripped);
     }
-    const constructed = try @import("runner.zig").construct(alloc, parsed);
+    const constructed = try runner.construct(alloc, parsed, config);
 
     for ([_][]const u8{
         "HTTP/1.1 200 OK",

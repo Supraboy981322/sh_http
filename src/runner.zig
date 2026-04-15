@@ -1,6 +1,8 @@
 const std = @import("std");
 const types = @import("types.zig");
 
+const Config = @import("config.zig").Config;
+
 pub fn parse(in:[]u8, alloc:std.mem.Allocator) !types.Parsed{
     var stripped = try std.ArrayList(u8).initCapacity(alloc, 0);
     defer _ = stripped.deinit(alloc);
@@ -46,7 +48,7 @@ pub fn parse(in:[]u8, alloc:std.mem.Allocator) !types.Parsed{
     return res;
 }
 
-pub fn exec(in:[]u8, alloc:std.mem.Allocator) ![]u8 {
+pub fn exec(in:[]u8, alloc:std.mem.Allocator, config:Config) ![]u8 {
     const fd_set = try std.posix.pipe();
     {
         var file = std.fs.File{ .handle = fd_set[1] };
@@ -56,6 +58,8 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator) ![]u8 {
     const out_pipe = try std.posix.pipe();
     const pid = try std.posix.fork();
     if (pid == 0) {
+        if (config.chroot) {
+        }
         try std.posix.dup2(
             out_pipe[1], std.posix.STDOUT_FILENO
         );
@@ -103,13 +107,13 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator) ![]u8 {
     return res.toOwnedSlice(alloc);
 }
 
-pub fn construct(alloc:std.mem.Allocator, parsed:types.Parsed) ![]u8 {
+pub fn construct(alloc:std.mem.Allocator, parsed:types.Parsed, config:Config) ![]u8 {
     var res = try std.ArrayList(u8).initCapacity(alloc, 0);
     defer res.deinit(alloc);
     var offset:usize = 0;
     for (parsed.scripts) |script| {
         try res.appendSlice(alloc, parsed.og[offset..script.pos]);
-        const out = try exec(script.txt, alloc);
+        const out = try exec(script.txt, alloc, config);
         try res.appendSlice(alloc, out);
         if (res.getLastOrNull()) |b| {
             if (b == '\n') _ = res.pop();
