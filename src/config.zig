@@ -33,7 +33,8 @@ pub fn read(file:*std.fs.File, alloc:std.mem.Allocator) !Config {
     var mem = try std.ArrayList(u8).initCapacity(alloc, 0);
     defer _ = mem.deinit(alloc);
 
-    var key:[]u8 = "";
+    var key:[]u8 = try alloc.alloc(u8, 0);
+    defer alloc.free(key);
 
     const buf = try alloc.alloc(u8, 1024);
     defer alloc.free(buf);
@@ -87,14 +88,20 @@ pub fn read(file:*std.fs.File, alloc:std.mem.Allocator) !Config {
                 if (c == '\n') break;
             },
 
-            '=' => key = try mem.toOwnedSlice(alloc),
+            '=' => {
+                alloc.free(key);
+                key = try mem.toOwnedSlice(alloc);
+            },
 
             else => try mem.append(alloc, b),
         } else if (b == '\n' and mem.items.len > 0) {
             const value = try mem.toOwnedSlice(alloc);
+            defer alloc.free(value);
+            if (key.len < 1)
+                return error.UnexpectedNewline;
             defer {
-                alloc.free(value);
                 alloc.free(key);
+                key = alloc.alloc(u8, 0) catch |e| @panic(@errorName(e));
             }
             const thing = std.meta.stringToEnum(Config.Valid, key) orelse {
                 return error.UnknownField;
