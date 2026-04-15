@@ -47,7 +47,13 @@ pub fn main() !void {
     const coms = try std.posix.pipe();
     _ = coms;
 
-    for (0..config.conn_forks) |_| {
+    var pids = try alloc.alloc(std.posix.pid_t, config.conn_forks);
+    defer alloc.free(pids);
+
+    var stop:bool = false;
+    _ = &stop;
+
+    for (0..config.conn_forks) |i| {
         const pid = try std.posix.fork();
         if (pid == 0) {
             while (true) {
@@ -61,9 +67,14 @@ pub fn main() !void {
                 };
             }
         }
+        pids[i] = pid;
     }
+
     std.debug.print("spawned {d} listeners\n", .{config.conn_forks});
-    while(true){}
+
+    while(!stop){}
+    for (pids) |pid|
+        try std.posix.kill(pid);
 }
 
 fn handle_request(conn:std.net.Server.Connection) !void {
