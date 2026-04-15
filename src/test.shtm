@@ -8,6 +8,7 @@
       for thing in $(ls); do
         echo "$thing" | sed 's/$/\t/'
       done
+      echo "log test" >&2
     $>
   </body>
 </html>
