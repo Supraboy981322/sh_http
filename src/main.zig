@@ -111,6 +111,7 @@ pub fn main() !void {
             )) break :loop;
 
             try msgs.append(alloc, try alloc.dupe(u8, buf[0..n]));
+            std.debug.print("{s}\n", .{buf[0..n]});
         }
     }
     for (pids) |pid|
