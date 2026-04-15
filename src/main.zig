@@ -55,10 +55,10 @@ pub fn main() !void {
                     std.debug.print("accept(): {t}\n", .{e});
                     continue;
                 };
-                try handle_request(conn);// catch |e| {
-                //    std.debug.print("handle_request(): {t}\n", .{e});
-                //    continue;
-                //};
+                handle_request(conn) catch |e| {
+                    std.debug.print("handle_request(): {t}\n", .{e});
+                    continue;
+                };
             }
         }
     }
