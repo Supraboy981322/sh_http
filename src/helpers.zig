@@ -42,3 +42,14 @@ pub fn write_or_err_and_break(
 
     return ok;
 }
+
+pub fn to_int_or_err(str:[]u8, comptime T:type) !T {
+    var v:T = 0;
+    for (str) |c| {
+        if (!std.ascii.isDigit(c))
+            return error.InvalidNumber;
+        v *= 10;
+        v += c - '0';
+    }
+    return v;
+}
