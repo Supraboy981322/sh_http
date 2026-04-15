@@ -1,4 +1,5 @@
 const std = @import("std");
+const hlp = @import("helpers.zig");
 const types = @import("types.zig");
 
 const Config = @import("config.zig").Config;
@@ -49,12 +50,14 @@ pub fn parse(in:[]u8, alloc:std.mem.Allocator) !types.Parsed{
 }
 
 pub fn exec(in:[]u8, alloc:std.mem.Allocator, config:Config) ![]u8 {
+
     const fd_set = try std.posix.pipe();
     {
         var file = std.fs.File{ .handle = fd_set[1] };
         const n = try file.write(in);
         if (n != in.len) std.debug.panic("only wrote {d} bytes of {d}\n", .{n, in.len});
     }
+
     const out_pipe = try std.posix.pipe();
     const pid = try std.posix.fork();
     if (pid == 0) {
@@ -67,19 +70,31 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, config:Config) ![]u8 {
             fd_set[0], std.posix.STDIN_FILENO
         );
 
-        std.posix.close(fd_set[1]);
-        std.posix.close(fd_set[0]);
-        std.posix.close(out_pipe[0]);
-        std.posix.close(out_pipe[1]);
+        for ([_]@TypeOf(fd_set[0]){} ++ fd_set ++ out_pipe) |fd| {
+            std.posix.close(fd);
+        }
+
+        const env = std.process.createEnvironFromMap(
+            alloc,
+            &(std.process.getEnvMap(alloc) catch |e| {
+                std.debug.print("env map: {t}\n", .{e});
+                return e;
+            }), .{}
+        ) catch |e| {
+            std.debug.print("env map: {t}\n", .{e});
+            return e;
+        };
 
         const err = std.posix.execvpeZ(
-            "bash", &.{ "bash", "-" }, try std.process.createEnvironFromMap(alloc, &(try std.process.getEnvMap(alloc)), .{})
+            "bash", &.{ "bash", "-" }, env
         );
         @panic(@errorName(err));
     }
-    std.posix.close(fd_set[1]);
-    std.posix.close(fd_set[0]);
-    std.posix.close(out_pipe[1]);
+
+    for ([_]@TypeOf(fd_set[0]){ out_pipe[1] } ++ fd_set) |fd| {
+        std.posix.close(fd);
+    }
+
     defer {
         std.posix.close(out_pipe[0]);
     }
@@ -88,19 +103,12 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, config:Config) ![]u8 {
 
     var buf:[1024]u8 = undefined;
     var output = std.fs.File{ .handle = out_pipe[0] };
-    var reader = output.reader(&buf);
+    const reader = @constCast(&output.reader(&buf).interface);
 
-    var res = try std.ArrayList(u8).initCapacity(alloc, 0);
+    var res = try std.ArrayList(u8).initCapacity(alloc, 1024);
     defer res.deinit(alloc);
 
-    while (!reader.atEnd()) {
-        var buf_2:[1024]u8 = undefined;
-        _ = &buf_2;
-        const b = reader.interface.takeByte() catch |e|
-            if (e != error.EndOfStream)
-                return e
-            else
-                break;
+    while (try hlp.itr(reader, null, null)) |b| {
         try res.append(alloc, b);
     }
 
