@@ -64,6 +64,9 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, config:Config) ![]u8 {
         if (config.chroot) {
         }
         try std.posix.dup2(
+            std.fs.File.stdout().handle, std.posix.STDERR_FILENO
+        );
+        try std.posix.dup2(
             out_pipe[1], std.posix.STDOUT_FILENO
         );
         try std.posix.dup2(

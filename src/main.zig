@@ -56,6 +56,9 @@ pub fn main() !void {
     for (0..config.conn_forks) |i| {
         const pid = try std.posix.fork();
         if (pid == 0) {
+            try std.posix.dup2(
+                coms[1], std.posix.STDOUT_FILENO
+            );
             while (true) {
                 const conn = server.accept() catch |e| {
                     std.debug.print("accept(): {t}\n", .{e});
