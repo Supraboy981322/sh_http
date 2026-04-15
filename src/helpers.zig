@@ -48,8 +48,12 @@ pub fn to_int_or_err(str:[]u8, comptime T:type) !T {
     for (str) |c| {
         if (!std.ascii.isDigit(c))
             return error.InvalidNumber;
-        v *= 10;
-        v += c - '0';
+        var i = @as(u128, @intCast(v));
+        i *= 10;
+        i += c - '0';
+        if (i > std.math.maxInt(T))
+            return error.NumberTooLarge;
+        v = @intCast(i);
     }
     return v;
 }

@@ -105,16 +105,7 @@ pub fn read(file:*std.fs.File, alloc:std.mem.Allocator) !Config {
                     alloc.free(conf.dir);
                     conf.dir = try alloc.dupe(u8, value);
                 },
-                .port => {
-                    var v:u16 = 0;
-                    for (value) |c| {
-                        if (!std.ascii.isDigit(c))
-                            return error.InvalidNumber;
-                        v *= 10;
-                        v += c - '0';
-                    }
-                    conf.port = v;
-                },
+                .port => conf.port = try hlp.to_int_or_err(value, u16),
                 .chroot => {
                     conf.chroot =
                         if (std.mem.eql(u8, value, "true"))
