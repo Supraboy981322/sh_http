@@ -1,4 +1,7 @@
 const std = @import("std");
+const hlp = @import("helpers.zig");
+
+const itr = hlp.itr;
 
 pub const Config = struct {
     port:u16 = 9843,
@@ -107,17 +110,4 @@ pub fn read(file:*std.fs.File, alloc:std.mem.Allocator) !Config {
         }
     }
     return conf;
-}
-
-pub fn itr(re:*std.Io.Reader, line_start:?*usize, i:?*usize) !?u8 {
-    const byte = re.takeByte() catch |e|
-        if (e != error.EndOfStream)
-            return e
-        else
-            null;
-    if (i) |idx| idx.* += 1;
-    if (line_start) |start| if (byte) |b| if (b == '\n') {
-        start.* = if (i) |idx| idx.* else unreachable;
-    };
-    return byte;
 }
