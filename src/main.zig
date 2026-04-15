@@ -74,7 +74,7 @@ pub fn main() !void {
 
     while(!stop){}
     for (pids) |pid|
-        try std.posix.kill(pid);
+        try std.posix.kill(pid, 9);
 }
 
 fn handle_request(conn:std.net.Server.Connection) !void {
