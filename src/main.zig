@@ -170,10 +170,12 @@ fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
     var request = try server.receiveHead();
 
     defer request.server.out.flush() catch {};
+
     //I cannot put into words how stupid of a flaw I have realized is in Zig's error handling
     errdefer |e| {
         const err_enum = std.meta.stringToEnum(
-            enum{ FileNotFound, PermissionDenied, ServerError }, @errorName(err_msg orelse e)
+            enum{ FileNotFound, PermissionDenied, ServerError },
+            @errorName(err_msg orelse e)
         ) orelse
             .ServerError;
         const err_str = switch (err_enum) {
@@ -222,9 +224,11 @@ fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
         }
 
         var file = try std.fs.cwd().openFile(name[0..end], .{});
+        defer file.close();
         var arr = try std.ArrayList(u8).initCapacity(alloc, 0);
         defer arr.deinit(alloc);
-        var file_reader = file.reader(&.{}).interface;
+        var buf:[1024]u8 = undefined;
+        var file_reader = @constCast(&file.reader(&buf).interface);
         try file_reader.appendRemainingUnlimited(alloc, &arr);
         break :b try arr.toOwnedSlice(alloc);
     };

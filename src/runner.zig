@@ -76,12 +76,12 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:*Request) ![]u8 {
         );
 
         if (config.chroot) if (req.root.len > 0) {
-            const ok = std.os.linux.chroot(req.root);
-            if (ok != 0) {
+            const err = std.os.linux.chroot(req.root);
+            if (err != 0) {
                 std.debug.print(
                     "exec: failed to chroot, am I running as root? ({s})\n"
                 , .{
-                    switch (std.posix.errno(ok)) {
+                    switch (std.posix.errno(err)) {
                         .PERM, .ACCES => "permission denied",
                         .NOENT => "no such file or directory",
                         .AGAIN => std.posix.exit(0),
@@ -91,6 +91,8 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:*Request) ![]u8 {
                 return error.ChrootFailed;
             }
         };
+
+        try std.posix.chdir("/");
 
         try std.posix.dup2(
             out_pipe[1], std.posix.STDOUT_FILENO
