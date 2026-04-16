@@ -149,11 +149,18 @@ fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
 
     var server = std.http.Server.init(reader.interface(), &writer.interface);
 
-    var request = server.receiveHead() catch |e| {
-        try stdout.print("recieveHead(): {t}\n", .{e});
-        return;
-    };
+    var request = try server.receiveHead();
 
+    errdefer {
+        for ([_][]const u8{
+            "HTTP/1.1 500 Internal Server Error",
+            "",
+            "server error",
+        }) |header| {
+            request.server.out.print("{s}\r\n", .{header}) catch {};
+            request.server.out.flush() catch {};
+        }
+    }
     defer request.server.out.flush() catch {};
 
     var page:[]const u8 = undefined;
