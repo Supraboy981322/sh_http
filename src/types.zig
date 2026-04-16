@@ -16,4 +16,5 @@ pub const Parsed = struct {
 pub const Request = struct {
     file:[]u8,
     root:[]u8,
+    config:@import("config.zig").Config,
 };

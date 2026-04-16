@@ -149,21 +149,23 @@ fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
     var server = std.http.Server.init(reader.interface(), &writer.interface);
 
     var request = server.receiveHead() catch |e| {
-        std.debug.print("recieveHead(): {t}\n", .{e});
+        try stdout.print("recieveHead(): {t}\n", .{e});
         return;
     };
 
     defer request.server.out.flush() catch {};
 
-    var itr = std.mem.splitAny(u8, request.head.target[1..], "?");
-    const page =
-        if (itr.first().len < 1)
-            "/"
-        else b: {
-            itr.reset();
-            break :b itr.first();
-        };
-    _ = &page;
+    var page:[]const u8 = undefined;
+    {
+        var itr = std.mem.splitAny(u8, request.head.target[1..], "?");
+        page =
+            if (itr.first().len < 1)
+                "/"
+            else b: {
+                itr.reset();
+                break :b itr.first();
+            };
+    }
 
     const src = @embedFile("test.shtm");
     const parsed = try runner.parse(@constCast(src), alloc);
@@ -171,7 +173,17 @@ fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
         alloc.free(parsed.og);
         alloc.free(parsed.stripped);
     }
-    const constructed = try runner.construct(alloc, parsed, config);
+    const constructed = try runner.construct(alloc, parsed, .{
+        .config = config,
+        .file = b: {
+            var page_itr = std.mem.splitBackwardsAny(u8, page, "/");
+            break :b @constCast(page_itr.first());
+        },
+        .root = b: {
+            var page_itr = std.mem.splitAny(u8, page, "/");
+            break :b @constCast(page_itr.first());
+        },
+    });
 
     for ([_][]const u8{
         "HTTP/1.1 200 OK",
