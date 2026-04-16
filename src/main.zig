@@ -203,8 +203,37 @@ fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
             };
     }
 
-    const src = @embedFile("test.shtm");
-    const parsed = try runner.parse(@constCast(src), alloc);
+    const src = b: {
+        const stat = std.fs.cwd().statFile(page) catch |e| {
+            err_msg = e;
+            try hlp.fail(e);
+            unreachable;
+        };
+
+        var name:[std.fs.max_path_bytes]u8 = undefined;
+        var end:usize = 0;
+
+        if (stat.kind == .directory) {
+            const foo = try std.mem.join(alloc, " ", &.{ page, "/index.shtm" });
+            defer alloc.free(foo);
+            for (foo, 0..) |b, i|
+                name[i] = b;
+            end = foo.len;
+        } else {
+            for (page, 0..) |b, i|
+                name[i] = b;
+            end = page.len;
+        }
+
+        var file = try std.fs.cwd().openFile(name[0..end], .{});
+        var arr = try std.ArrayList(u8).initCapacity(alloc, 0);
+        defer arr.deinit(alloc);
+        var file_reader = file.reader(&.{}).interface;
+        try file_reader.appendRemainingUnlimited(alloc, &arr);
+        break :b try arr.toOwnedSlice(alloc);
+    };
+
+    const parsed = try runner.parse(src, alloc);
     defer {
         alloc.free(parsed.og);
         alloc.free(parsed.stripped);
