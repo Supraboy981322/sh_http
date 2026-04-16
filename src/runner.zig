@@ -55,10 +55,17 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:*Request) ![]u8 {
     const fd_set = try std.posix.pipe();
     {
         var file = std.fs.File{ .handle = fd_set[1] };
+        _ = try file.write(
+            \\/.bin/busybox --install -s /.bin/
+        ++ "\n");
         const n = try file.write(in);
         if (n != in.len) try req.log.err(
             "only wrote {d} bytes of {d}\n", .{n, in.len}
         );
+        _ = try file.write(
+            \\cd /.bin/
+            \\rm $(ls /.bin/ | sed '/^sh$/d' | sed '/^busybox$/d' | sed 's/^/\/\.bin\//g')
+        ++ "\n");
     }
     
     const bin_path = b: {
@@ -145,15 +152,11 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:*Request) ![]u8 {
         envmap.remove("PATH");
         try envmap.put("PATH", "/.bin");
 
-        const env = std.process.createEnvironFromMap(
-            alloc, &envmap, .{}
-        ) catch |e| {
-            std.debug.print("env map: {t}\n", .{e});
-            return e;
-        };
-
         const err = std.posix.execvpeZ(
-            "/.bin/sh", &.{ "/.bin/sh" }, env
+            "/.bin/sh", &.{ "/.bin/sh" }, &.{
+                "PATH=/.bin",
+                null,
+            }
         );
         std.debug.print("execvpeZ failed: {t}\n", .{err});
     }
