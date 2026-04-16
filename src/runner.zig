@@ -60,6 +60,39 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:*Request) ![]u8 {
             "only wrote {d} bytes of {d}\n", .{n, in.len}
         );
     }
+    
+    const bin_path = b: {
+        const reasonable_og_path = try std.fs.cwd().realpathAlloc(alloc, "./.bin");
+        const elderly_og_path = try alloc.dupeZ(u8, reasonable_og_path);
+        defer {
+            alloc.free(reasonable_og_path);
+            alloc.free(elderly_og_path);
+        }
+
+        const mount_path = try std.fs.path.joinZ(alloc, &[_][]const u8{
+            std.fs.path.dirname(reasonable_og_path).?, req.root, ".bin"
+        });
+        std.fs.cwd().makeDir(mount_path) catch |e|
+            if (e != error.PathAlreadyExists) return e;
+        const err = std.os.linux.mount(
+            elderly_og_path, mount_path, null, std.os.linux.MS.BIND, 0
+        );
+        if (err != 0) {
+            try @constCast(&std.fs.File.stdout().writer(&.{}).interface).print(
+                "failed to bind-mount bin dir, cannot proceed without binaries: {s}\n"
+            , .{
+                switch (std.posix.errno(err)) {
+                    .PERM, .ACCES => "permission denied",
+                    .NOENT => "no such file or directory",
+                    .AGAIN => std.posix.exit(0),
+                    else => "",
+                }
+            });
+            return error.@"/bin dir bind mount failed";
+        }
+        break :b mount_path;
+    };
+    defer _ = std.os.linux.umount(bin_path);
 
     const out_pipe = try std.posix.pipe();
     const pid = try std.posix.fork();
@@ -120,7 +153,7 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:*Request) ![]u8 {
         };
 
         const err = std.posix.execvpeZ(
-            "bash", &.{ "bash", "-" }, env
+            "/.bin/sh", &.{ "/.bin/sh" }, env
         );
         std.debug.print("execvpeZ failed: {t}\n", .{err});
     }
