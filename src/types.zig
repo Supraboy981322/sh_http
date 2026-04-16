@@ -15,8 +15,8 @@ pub const Parsed = struct {
 
 pub const Request = struct {
     const Self = @This();
-    file:[]u8,
-    root:[]u8,
+    file:[:0]const u8,
+    root:[:0]const u8,
     config:@import("config.zig").Config,
     log:Log,
 

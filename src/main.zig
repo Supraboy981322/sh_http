@@ -181,18 +181,25 @@ fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
         alloc.free(parsed.og);
         alloc.free(parsed.stripped);
     }
-    const constructed = try runner.construct(alloc, parsed, @constCast(&types.Request{
+
+    var req:types.Request = .{
         .config = config,
         .log = .{ .stdout = stdout },
         .file = b: {
             var page_itr = std.mem.splitBackwardsAny(u8, page, "/");
-            break :b @constCast(page_itr.first());
+            break :b try alloc.dupeZ(u8, page_itr.first());
         },
         .root = b: {
             var page_itr = std.mem.splitAny(u8, page, "/");
-            break :b @constCast(page_itr.first());
+            break :b try alloc.dupeZ(u8, page_itr.first());
         },
-    }));
+    };
+    defer {
+        alloc.free(req.file);
+        alloc.free(req.root);
+    }
+
+    const constructed = try runner.construct(alloc, parsed, &req);
 
     for ([_][]const u8{
         "HTTP/1.1 200 OK",
