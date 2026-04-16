@@ -57,3 +57,7 @@ pub fn to_int_or_err(str:[]u8, comptime T:type) !T {
     }
     return v;
 }
+
+pub fn fail(e:anyerror) !void {
+    return e;
+}

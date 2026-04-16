@@ -147,6 +147,8 @@ pub fn main() !void {
 }
 
 fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
+    var err_msg:?anyerror = null;
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
@@ -167,18 +169,27 @@ fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
 
     var request = try server.receiveHead();
 
-    errdefer {
-        for ([_][]const u8{
-            "HTTP/1.1 500 Internal Server Error",
-            "",
-            "server error",
-        }) |header| {
-            request.server.out.print("{s}\r\n", .{header}) catch {};
-            request.server.out.flush() catch {};
-        }
-    }
-
     defer request.server.out.flush() catch {};
+    //I cannot put into words how stupid of a flaw I have realized is in Zig's error handling
+    errdefer |e| {
+        const err_enum = std.meta.stringToEnum(
+            enum{ FileNotFound, PermissionDenied, ServerError }, @errorName(err_msg orelse e)
+        ) orelse
+            .ServerError;
+        const err_str = switch (err_enum) {
+            .FileNotFound => "404 File Not Found",
+            .PermissionDenied => "403 Permission Denied",
+            .ServerError => "500 Internal Server Error",
+        };
+        request.server.out.print(
+            "HTTP/1.1 {s}\r\n", .{err_str}
+        ) catch {};
+        request.server.out.flush() catch {};
+        request.server.out.print("\r\n", .{}) catch {};
+        request.server.out.flush() catch {};
+        request.server.out.print("{s}\n", .{err_str}) catch {};
+        request.server.out.flush() catch {};
+    }
 
     var page:[]const u8 = undefined;
     {
