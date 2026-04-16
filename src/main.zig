@@ -3,6 +3,7 @@ const conf = @import("config.zig");
 const runner = @import("runner.zig");
 const hlp = @import("helpers.zig");
 const types = @import("types.zig");
+const parser = @import("parser.zig");
 
 const Config = conf.Config;
 
@@ -234,7 +235,7 @@ fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
         break :b try arr.toOwnedSlice(alloc);
     };
 
-    const parsed = try runner.parse(src, alloc);
+    const parsed = try parser.parse(src, alloc);
     defer {
         alloc.free(parsed.og);
         alloc.free(parsed.stripped);
