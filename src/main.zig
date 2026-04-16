@@ -82,10 +82,18 @@ pub fn main() !void {
             alloc.free(msg);
         msgs.deinit(alloc);
     }
+    const whitespace = comptime b: {
+        const space = std.ascii.whitespace;
+        var arr = [_]u8{0} ** space.len;
+        for (space, 0..) |s, i|
+            arr[i] = s;
+        break :b arr;
+    };
     loop: while(!stop){
         var buf:[1024]u8 = undefined;
         const n = try std.posix.read(coms[0], &buf);
         if (n > 0) {
+            const message = std.mem.trim(u8, buf[0..n], &whitespace);
             var just_created_log:bool = false;
 
             var file = @constCast(&(
@@ -108,11 +116,11 @@ pub fn main() !void {
             };
 
             if (try hlp.write_or_err_and_break(
-                file, buf[0..n], "log", .{ .newline = true }
+                file, @constCast(message), "log", .{ .newline = true }
             )) break :loop;
 
-            try msgs.append(alloc, try alloc.dupe(u8, buf[0..n]));
-            std.debug.print("{s}\n", .{buf[0..n]});
+            try msgs.append(alloc, try alloc.dupe(u8, message));
+            std.debug.print("{s}\n", .{message});
         }
     }
     for (pids) |pid|
