@@ -105,12 +105,15 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:*Request) ![]u8 {
             std.posix.close(fd);
         }
 
+        var envmap = std.process.getEnvMap(alloc) catch |e| {
+            std.debug.print("env map: {t}\n", .{e});
+            return e;
+        };
+        envmap.remove("PATH");
+        try envmap.put("PATH", "/.bin");
+
         const env = std.process.createEnvironFromMap(
-            alloc,
-            &(std.process.getEnvMap(alloc) catch |e| {
-                std.debug.print("env map: {t}\n", .{e});
-                return e;
-            }), .{}
+            alloc, &envmap, .{}
         ) catch |e| {
             std.debug.print("env map: {t}\n", .{e});
             return e;
@@ -119,7 +122,7 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:*Request) ![]u8 {
         const err = std.posix.execvpeZ(
             "bash", &.{ "bash", "-" }, env
         );
-        try req.log.fatal("execvpeZ failed: {t}\n", .{err});
+        std.debug.print("execvpeZ failed: {t}\n", .{err});
     }
 
     for ([_]@TypeOf(fd_set[0]){ out_pipe[1] } ++ fd_set) |fd| {
