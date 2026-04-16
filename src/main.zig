@@ -59,13 +59,14 @@ pub fn main() !void {
             try std.posix.dup2(
                 coms[1], std.posix.STDOUT_FILENO
             );
+            var stdout = std.fs.File.stdout().writer(&.{}).interface;
             while (true) {
                 const conn = server.accept() catch |e| {
-                    std.debug.print("accept(): {t}\n", .{e});
+                    try stdout.print("error accepting request: {t}\n", .{e});
                     continue;
                 };
-                handle_request(conn) catch |e| {
-                    std.debug.print("handle_request(): {t}\n", .{e});
+                handle_request(conn, &stdout) catch |e| {
+                    try stdout.print("error accepting request: {t}\n", .{e});
                     continue;
                 };
             }
@@ -118,7 +119,7 @@ pub fn main() !void {
         try std.posix.kill(pid, 9);
 }
 
-fn handle_request(conn:std.net.Server.Connection) !void {
+fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
