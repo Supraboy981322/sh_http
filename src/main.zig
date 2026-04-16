@@ -182,12 +182,8 @@ fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
             .ServerError => "500 Internal Server Error",
         };
         request.server.out.print(
-            "HTTP/1.1 {s}\r\n", .{err_str}
+            "HTTP/1.1 {s}\r\n\r\n{s}\n", .{err_str, err_str}
         ) catch {};
-        request.server.out.flush() catch {};
-        request.server.out.print("\r\n", .{}) catch {};
-        request.server.out.flush() catch {};
-        request.server.out.print("{s}\n", .{err_str}) catch {};
         request.server.out.flush() catch {};
     }
 
