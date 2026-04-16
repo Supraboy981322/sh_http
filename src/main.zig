@@ -85,6 +85,7 @@ pub fn main() !void {
                 };
                 defer conn.stream.close();
                 handle_request(conn, &stdout) catch |e| {
+                    std.debug.print("{t}\n", .{e});
                     try stdout.print("error accepting request: {t}\n", .{e});
                     continue;
                 };
