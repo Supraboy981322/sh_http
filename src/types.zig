@@ -14,7 +14,26 @@ pub const Parsed = struct {
 };
 
 pub const Request = struct {
+    const Self = @This();
     file:[]u8,
     root:[]u8,
     config:@import("config.zig").Config,
+    log:Log,
+
+    const Log = struct {
+        stdout:*std.Io.Writer,
+        
+        pub fn info(self:*Log, comptime msg:[]const u8, fmt:anytype) !void {
+            try self.stdout.print("request/info: " ++ msg, fmt);
+            try self.stdout.flush();
+        }
+        pub fn err(self:*Log, comptime msg:[]const u8, fmt:anytype) !void {
+            try self.stdout.print("request/error: " ++ msg, fmt);
+            try self.stdout.flush();
+        }
+        pub fn fatal(self:*Log, comptime msg:[]const u8, fmt:anytype) !void {
+            try self.stdout.print("request/fatal: " ++ msg, fmt);
+            try self.stdout.flush();
+        }
+    };
 };
