@@ -65,7 +65,9 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:*Request) ![]u8 {
     const pid = try std.posix.fork();
     if (pid == 0) {
         defer {
-            _ = (std.fs.File{ .handle = out_pipe[1] }).write("[server error]") catch {};
+            _ = (std.fs.File{
+                .handle = out_pipe[1]
+            }).write("[server error]") catch {};
             std.posix.abort();
         }
 
@@ -77,8 +79,15 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:*Request) ![]u8 {
             const ok = std.os.linux.chroot(req.root);
             if (ok != 0) {
                 std.debug.print(
-                    "exec: failed to chroot, am I running as root?\n"
-                , .{});
+                    "exec: failed to chroot, am I running as root? ({s})\n"
+                , .{
+                    switch (std.posix.errno(ok)) {
+                        .PERM, .ACCES => "permission denied",
+                        .NOENT => "no such file or directory",
+                        .AGAIN => std.posix.exit(0),
+                        else => "",
+                    }
+                });
                 return error.ChrootFailed;
             }
         };

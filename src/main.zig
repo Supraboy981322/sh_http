@@ -54,6 +54,22 @@ pub fn main() !void {
     var stop:bool = false;
     _ = &stop;
 
+    {
+        const path = std.fs.cwd().realpathAlloc(alloc, config.dir) catch |e| {
+            std.debug.print(
+                "failed to access web root directory ({s}): {t}\n", .{config.dir, e}
+            );
+            std.posix.abort();
+        };
+        defer alloc.free(path);
+        std.posix.chdir(path) catch |e| {
+            std.debug.print(
+                "failed to access web root directory ({s}): {t}\n", .{path, e}
+            );
+            std.posix.abort();
+        };
+    }
+
     for (0..config.conn_forks) |i| {
         const pid = try std.posix.fork();
         if (pid == 0) {
@@ -161,6 +177,7 @@ fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
             request.server.out.flush() catch {};
         }
     }
+
     defer request.server.out.flush() catch {};
 
     var page:[]const u8 = undefined;
