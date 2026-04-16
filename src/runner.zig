@@ -11,19 +11,25 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:*Request) ![]u8 {
     {
         var file = std.fs.File{ .handle = fd_set[1] };
         _ = try file.write(
-            \\/.bin/busybox --install -s /.bin/
+            \\/.bin/busybox --install -s /.bin/ 1>&2
+            \\cleanup() {
+            \\  cd /.bin/
+            \\  declare to_remove="$(ls /.bin/ \
+            \\    | sed '/^sh$/d' \
+            \\    | sed '/^busybox$/d' \
+            \\    | sed 's/^/\/\.bin\//g')"
+            \\  rm $to_remove
+            \\}
+            \\trap cleanup EXIT 1>&2;
         ++ "\n");
         const n = try file.write(in);
         if (n != in.len) try req.log.err(
             "only wrote {d} bytes of {d}\n", .{n, in.len}
         );
-        _ = try file.write(
-            \\cd /.bin/
-            \\rm $(ls /.bin/ | sed '/^sh$/d' | sed '/^busybox$/d' | sed 's/^/\/\.bin\//g')
-        ++ "\n");
     }
     
     const bin_path = b: {
+
         const reasonable_og_path = try std.fs.cwd().realpathAlloc(alloc, "./.bin");
         const elderly_og_path = try alloc.dupeZ(u8, reasonable_og_path);
         defer {
@@ -34,8 +40,10 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:*Request) ![]u8 {
         const mount_path = try std.fs.path.joinZ(alloc, &[_][]const u8{
             std.fs.path.dirname(reasonable_og_path).?, req.root, ".bin"
         });
+
         std.fs.cwd().makeDir(mount_path) catch |e|
             if (e != error.PathAlreadyExists) return e;
+
         const err = std.os.linux.mount(
             elderly_og_path, mount_path, null, std.os.linux.MS.BIND, 0
         );
