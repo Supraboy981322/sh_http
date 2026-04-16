@@ -60,12 +60,14 @@ pub fn main() !void {
             try std.posix.dup2(
                 coms[1], std.posix.STDOUT_FILENO
             );
-            var stdout = std.fs.File.stdout().writer(&.{}).interface;
+            var buf:[1024]u8 = undefined;
+            var stdout = std.fs.File.stdout().writer(&buf).interface;
             while (true) {
                 const conn = server.accept() catch |e| {
                     try stdout.print("error accepting request: {t}\n", .{e});
                     continue;
                 };
+                defer conn.stream.close();
                 handle_request(conn, &stdout) catch |e| {
                     try stdout.print("error accepting request: {t}\n", .{e});
                     continue;
@@ -135,8 +137,6 @@ fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
     defer _ = arena.deinit();
     const alloc = arena.allocator();
 
-    defer conn.stream.close();
-    
     var reader = b: {
         var buf:[1024]u8 = undefined;
         break :b conn.stream.reader(&buf);
