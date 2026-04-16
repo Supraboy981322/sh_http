@@ -2,6 +2,7 @@ const std = @import("std");
 const conf = @import("config.zig");
 const runner = @import("runner.zig");
 const hlp = @import("helpers.zig");
+const types = @import("types.zig");
 
 const Config = conf.Config;
 
@@ -173,8 +174,9 @@ fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
         alloc.free(parsed.og);
         alloc.free(parsed.stripped);
     }
-    const constructed = try runner.construct(alloc, parsed, .{
+    const constructed = try runner.construct(alloc, parsed, @constCast(&types.Request{
         .config = config,
+        .log = .{ .stdout = stdout },
         .file = b: {
             var page_itr = std.mem.splitBackwardsAny(u8, page, "/");
             break :b @constCast(page_itr.first());
@@ -183,7 +185,7 @@ fn handle_request(conn:std.net.Server.Connection, stdout:*std.Io.Writer) !void {
             var page_itr = std.mem.splitAny(u8, page, "/");
             break :b @constCast(page_itr.first());
         },
-    });
+    }));
 
     for ([_][]const u8{
         "HTTP/1.1 200 OK",

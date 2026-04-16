@@ -49,14 +49,16 @@ pub fn parse(in:[]u8, alloc:std.mem.Allocator) !types.Parsed{
     return res;
 }
 
-pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:Request) ![]u8 {
+pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:*Request) ![]u8 {
     const config = req.config;
 
     const fd_set = try std.posix.pipe();
     {
         var file = std.fs.File{ .handle = fd_set[1] };
         const n = try file.write(in);
-        if (n != in.len) std.debug.panic("only wrote {d} bytes of {d}\n", .{n, in.len});
+        if (n != in.len) try req.log.err(
+            "only wrote {d} bytes of {d}\n", .{n, in.len}
+        );
     }
 
     const out_pipe = try std.posix.pipe();
@@ -99,7 +101,8 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:Request) ![]u8 {
         const err = std.posix.execvpeZ(
             "bash", &.{ "bash", "-" }, env
         );
-        @panic(@errorName(err));
+        try req.log.fatal("execvpeZ failed: {t}\n", .{err});
+        std.posix.exit(1);
     }
 
     for ([_]@TypeOf(fd_set[0]){ out_pipe[1] } ++ fd_set) |fd| {
@@ -126,7 +129,7 @@ pub fn exec(in:[]u8, alloc:std.mem.Allocator, req:Request) ![]u8 {
     return res.toOwnedSlice(alloc);
 }
 
-pub fn construct(alloc:std.mem.Allocator, parsed:types.Parsed, req:Request) ![]u8 {
+pub fn construct(alloc:std.mem.Allocator, parsed:types.Parsed, req:*Request) ![]u8 {
     var res = try std.ArrayList(u8).initCapacity(alloc, 0);
     defer res.deinit(alloc);
     var offset:usize = 0;
